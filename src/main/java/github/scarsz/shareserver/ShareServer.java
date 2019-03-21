@@ -17,6 +17,7 @@ public class ShareServer {
     private final Connection connection;
 
     public ShareServer(String key, int port) throws SQLException {
+        boolean isProduction = !System.getProperty("os.name").contains("Windows");
         if (key == null) throw new IllegalArgumentException("No key given");
 
         this.connection = DriverManager.getConnection("jdbc:h2:" + new File("share").getAbsolutePath());
@@ -130,7 +131,11 @@ public class ShareServer {
                 statement.setBlob(4, input);
                 statement.executeUpdate();
 
-                return request.url() + id + "/" + fileName;
+                if (isProduction) {
+                    return "https://img.greemdev.net/" + id + "/" + fileName;
+                } else {
+                    return request.url() + id + "/" + fileName;
+                }
             } catch (Exception ignored) {
                 return null;
             }
