@@ -1,22 +1,27 @@
 package github.scarsz.shareserver;
 
 import org.apache.commons.lang3.RandomStringUtils;
+import spark.Spark;
 import spark.utils.IOUtils;
 import spark.utils.StringUtils;
-
 import javax.servlet.MultipartConfigElement;
 import javax.servlet.http.Part;
 import java.io.File;
 import java.io.InputStream;
 import java.sql.*;
 
-import static spark.Spark.*;
-
 public class ShareServer {
 
     private final Connection connection;
 
-    ShareServer(String key, int port) throws SQLException {
+    static void start(String[] args) throws SQLException {
+        new ShareServer(
+                args.length >= 1 ? args[0] : null,
+                args.length >= 2 ? Integer.parseInt(args[1]) : 8082
+        );
+    }
+
+    private ShareServer(String key, int port) throws SQLException {
         boolean isProduction = !System.getProperty("os.name").contains("Windows");
         if (key == null) throw new IllegalArgumentException("No key given");
 
@@ -36,13 +41,13 @@ public class ShareServer {
             }
         }));
 
-        port(port);
+        Spark.port(port);
 
         // gzip where possible
-        after((request, response) -> response.header("Content-Encoding", "gzip"));
+        Spark.after((request, response) -> response.header("Content-Encoding", "gzip"));
 
         // logging
-        afterAfter((request, response) -> {
+        Spark.afterAfter((request, response) -> {
             String forwardedFor = request.headers("X-Forwarded-For");
             String ip = StringUtils.isNotBlank(forwardedFor) ? forwardedFor : request.ip();
             String method = request.requestMethod();
@@ -51,19 +56,19 @@ public class ShareServer {
         });
 
         // redirect /id -> /id/filename.ext
-        get("/:id", (request, response) -> {
+        Spark.get("/:id", (request, response) -> {
             PreparedStatement statement = this.connection.prepareStatement("SELECT `filename` FROM `files` WHERE `id` = ? LIMIT 1");
             statement.setString(1, request.params("id"));
             ResultSet result = statement.executeQuery();
             if (result.next()) {
                 response.redirect("/" + request.params(":id") + "/" + result.getString("filename"), 301);
             } else {
-                halt(404, "Not found");
+                Spark.halt(404, "Not found");
             }
             return null;
         });
         // serve files from db
-        get("/:id/*", (request, response) -> {
+        Spark.get("/:id/*", (request, response) -> {
             PreparedStatement statement = this.connection.prepareStatement("SELECT `filename`, `type`, `data` FROM `files` WHERE `id` = ? LIMIT 1");
             statement.setString(1, request.params(":id"));
             ResultSet result = statement.executeQuery();
@@ -82,14 +87,14 @@ public class ShareServer {
                 response.raw().getOutputStream().close();
                 return response.raw();
             } else {
-                halt(404, "Not found");
+                Spark.halt(404, "Not found");
                 response.status(404);
                 return "404";
             }
         });
 
         // hit counting
-        after("/:id/*", (request, response) -> {
+        Spark.after("/:id/*", (request, response) -> {
             if (response.status() == 200) {
                 PreparedStatement statement = this.connection.prepareStatement("SELECT `hits` FROM `files` WHERE `id` = ?");
                 statement.setString(1, request.params(":id"));
@@ -104,19 +109,19 @@ public class ShareServer {
         });
 
         // file uploading
-        put("/", (request, response) -> {
+        Spark.put("/", (request, response) -> {
             request.attribute("org.eclipse.jetty.multipartConfig", new MultipartConfigElement("/temp"));
             String givenKey = request.raw().getPart("key") != null
                     ? IOUtils.toString(request.raw().getPart("key").getInputStream())
                     : null;
             if (StringUtils.isBlank(givenKey) || !givenKey.equals(key)) {
-                halt(403, "Forbidden");
+                Spark.halt(403, "Forbidden");
             }
 
             try {
                 Part part = request.raw().getPart("file");
                 if (part == null) {
-                    halt(400, "File form name configured in ShareX should be \"file\"; nothing else.");
+                    Spark.halt(400, "File form name configured in ShareX should be \"file\"; nothing else.");
                     return "400";
                 }
                 InputStream input = part.getInputStream();
