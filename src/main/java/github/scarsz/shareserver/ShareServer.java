@@ -16,7 +16,7 @@ public class ShareServer {
 
     private final Connection connection;
 
-    public ShareServer(String key, int port) throws SQLException {
+    ShareServer(String key, int port) throws SQLException {
         boolean isProduction = !System.getProperty("os.name").contains("Windows");
         if (key == null) throw new IllegalArgumentException("No key given");
 
@@ -117,7 +117,7 @@ public class ShareServer {
                 Part part = request.raw().getPart("file");
                 if (part == null) {
                     halt(400, "File form name configured in ShareX should be \"file\"; nothing else.");
-                    return null;
+                    return "400";
                 }
                 InputStream input = part.getInputStream();
                 String fileName = part.getSubmittedFileName();
@@ -137,7 +137,7 @@ public class ShareServer {
                     return request.url() + id + "/" + fileName;
                 }
             } catch (Exception ignored) {
-                return null;
+                return "500";
             }
         });
     }
