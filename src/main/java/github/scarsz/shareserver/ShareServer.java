@@ -5,6 +5,7 @@ import spark.utils.IOUtils;
 import spark.utils.StringUtils;
 
 import javax.servlet.MultipartConfigElement;
+import javax.servlet.http.Part;
 import java.io.File;
 import java.io.InputStream;
 import java.sql.*;
@@ -18,8 +19,8 @@ public class ShareServer {
     public ShareServer(String key, int port) throws SQLException {
         if (key == null) throw new IllegalArgumentException("No key given");
 
-        connection = DriverManager.getConnection("jdbc:h2:" + new File("share").getAbsolutePath());
-        connection.prepareStatement("CREATE TABLE IF NOT EXISTS `files` (" +
+        this.connection = DriverManager.getConnection("jdbc:h2:" + new File("share").getAbsolutePath());
+        this.connection.prepareStatement("CREATE TABLE IF NOT EXISTS `files` (" +
                 "`id` VARCHAR NOT NULL, " +
                 "`filename` VARCHAR NOT NULL, " +
                 "`hits` INT NOT NULL DEFAULT 0, " +
@@ -28,7 +29,7 @@ public class ShareServer {
                 "PRIMARY KEY (`id`), UNIQUE KEY id (`id`))").executeUpdate();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
-                connection.close();
+                this.connection.close();
             } catch (SQLException e) {
                 e.printStackTrace();
             }
@@ -50,7 +51,7 @@ public class ShareServer {
 
         // redirect /id -> /id/filename.ext
         get("/:id", (request, response) -> {
-            PreparedStatement statement = connection.prepareStatement("SELECT `filename` FROM `files` WHERE `id` = ? LIMIT 1");
+            PreparedStatement statement = this.connection.prepareStatement("SELECT `filename` FROM `files` WHERE `id` = ? LIMIT 1");
             statement.setString(1, request.params("id"));
             ResultSet result = statement.executeQuery();
             if (result.next()) {
@@ -62,7 +63,7 @@ public class ShareServer {
         });
         // serve files from db
         get("/:id/*", (request, response) -> {
-            PreparedStatement statement = connection.prepareStatement("SELECT `filename`, `type`, `data` FROM `files` WHERE `id` = ? LIMIT 1");
+            PreparedStatement statement = this.connection.prepareStatement("SELECT `filename`, `type`, `data` FROM `files` WHERE `id` = ? LIMIT 1");
             statement.setString(1, request.params(":id"));
             ResultSet result = statement.executeQuery();
             if (result.next()) {
@@ -89,12 +90,12 @@ public class ShareServer {
         // hit counting
         after("/:id/*", (request, response) -> {
             if (response.status() == 200) {
-                PreparedStatement statement = connection.prepareStatement("SELECT `hits` FROM `files` WHERE `id` = ?");
+                PreparedStatement statement = this.connection.prepareStatement("SELECT `hits` FROM `files` WHERE `id` = ?");
                 statement.setString(1, request.params(":id"));
                 ResultSet result = statement.executeQuery();
                 if (result.next()) {
                     System.out.println(request.params(":id") + " is now at " + (result.getInt("hits") + 1) + " hits");
-                    statement = connection.prepareStatement("UPDATE `files` SET `hits` = `hits` + 1 WHERE `id` = ?");
+                    statement = this.connection.prepareStatement("UPDATE `files` SET `hits` = `hits` + 1 WHERE `id` = ?");
                     statement.setString(1, request.params(":id"));
                     statement.executeUpdate();
                 }
@@ -104,7 +105,6 @@ public class ShareServer {
         // file uploading
         put("/", (request, response) -> {
             request.attribute("org.eclipse.jetty.multipartConfig", new MultipartConfigElement("/temp"));
-
             String givenKey = request.raw().getPart("key") != null
                     ? IOUtils.toString(request.raw().getPart("key").getInputStream())
                     : null;
@@ -112,12 +112,18 @@ public class ShareServer {
                 halt(403, "Forbidden");
             }
 
-            try (InputStream input = request.raw().getPart("file").getInputStream()) {
-                String fileName = request.raw().getPart("file").getSubmittedFileName();
-                String type = request.raw().getPart("file").getContentType();
-                String id = RandomStringUtils.randomAlphabetic(6);
+            try {
+                Part part = request.raw().getPart("file");
+                if (part == null) {
+                    halt(400, "File form name configured in ShareX should be \"file\"; nothing else.");
+                    return null;
+                }
+                InputStream input = part.getInputStream();
+                String fileName = part.getSubmittedFileName();
+                String type = part.getContentType();
+                String id = RandomStringUtils.randomAlphabetic(10);
 
-                PreparedStatement statement = connection.prepareStatement("INSERT INTO `files` (`id`, `filename`, `type`, `data`) VALUES (?, ?, ?, ?)");
+                PreparedStatement statement = this.connection.prepareStatement("INSERT INTO `files` (`id`, `filename`, `type`, `data`) VALUES (?, ?, ?, ?)");
                 statement.setString(1, id);
                 statement.setString(2, fileName);
                 statement.setString(3, type);
@@ -125,6 +131,8 @@ public class ShareServer {
                 statement.executeUpdate();
 
                 return request.url() + id + "/" + fileName;
+            } catch (Exception ignored) {
+                return null;
             }
         });
     }
