@@ -12,8 +12,7 @@ import java.sql.*;
 
 public class ShareServer {
 
-    private final Connection connection;
-
+    private final Connection conn;
     static void start(String[] args) throws SQLException {
         new ShareServer(
                 args.length >= 1 ? args[0] : null,
@@ -25,8 +24,8 @@ public class ShareServer {
         boolean isProduction = !System.getProperty("os.name").contains("Windows");
         if (key == null) throw new IllegalArgumentException("No key given");
 
-        this.connection = DriverManager.getConnection("jdbc:h2:" + new File("share").getAbsolutePath());
-        this.connection.prepareStatement("CREATE TABLE IF NOT EXISTS `files` (" +
+        this.conn = DriverManager.getConnection("jdbc:h2:" + new File("share").getAbsolutePath());
+        this.conn.prepareStatement("CREATE TABLE IF NOT EXISTS `files` (" +
                 "`id` VARCHAR NOT NULL, " +
                 "`filename` VARCHAR NOT NULL, " +
                 "`hits` INT NOT NULL DEFAULT 0, " +
@@ -35,7 +34,7 @@ public class ShareServer {
                 "PRIMARY KEY (`id`), UNIQUE KEY id (`id`))").executeUpdate();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
-                this.connection.close();
+                this.conn.close();
             } catch (SQLException e) {
                 e.printStackTrace();
             }
@@ -57,7 +56,7 @@ public class ShareServer {
 
         // redirect /id -> /id/filename.ext
         Spark.get("/:id", (request, response) -> {
-            PreparedStatement statement = this.connection.prepareStatement("SELECT `filename` FROM `files` WHERE `id` = ? LIMIT 1");
+            PreparedStatement statement = this.conn.prepareStatement("SELECT `filename` FROM `files` WHERE `id` = ? LIMIT 1");
             statement.setString(1, request.params("id"));
             ResultSet result = statement.executeQuery();
             if (result.next()) {
@@ -69,7 +68,7 @@ public class ShareServer {
         });
         // serve files from db
         Spark.get("/:id/*", (request, response) -> {
-            PreparedStatement statement = this.connection.prepareStatement("SELECT `filename`, `type`, `data` FROM `files` WHERE `id` = ? LIMIT 1");
+            PreparedStatement statement = this.conn.prepareStatement("SELECT `filename`, `type`, `data` FROM `files` WHERE `id` = ? LIMIT 1");
             statement.setString(1, request.params(":id"));
             ResultSet result = statement.executeQuery();
             if (result.next()) {
@@ -96,12 +95,12 @@ public class ShareServer {
         // hit counting
         Spark.after("/:id/*", (request, response) -> {
             if (response.status() == 200) {
-                PreparedStatement statement = this.connection.prepareStatement("SELECT `hits` FROM `files` WHERE `id` = ?");
+                PreparedStatement statement = this.conn.prepareStatement("SELECT `hits` FROM `files` WHERE `id` = ?");
                 statement.setString(1, request.params(":id"));
                 ResultSet result = statement.executeQuery();
                 if (result.next()) {
                     System.out.println(request.params(":id") + " is now at " + (result.getInt("hits") + 1) + " hits");
-                    statement = this.connection.prepareStatement("UPDATE `files` SET `hits` = `hits` + 1 WHERE `id` = ?");
+                    statement = this.conn.prepareStatement("UPDATE `files` SET `hits` = `hits` + 1 WHERE `id` = ?");
                     statement.setString(1, request.params(":id"));
                     statement.executeUpdate();
                 }
@@ -129,7 +128,7 @@ public class ShareServer {
                 String type = part.getContentType();
                 String id = RandomStringUtils.randomAlphabetic(10);
 
-                PreparedStatement statement = this.connection.prepareStatement("INSERT INTO `files` (`id`, `filename`, `type`, `data`) VALUES (?, ?, ?, ?)");
+                PreparedStatement statement = this.conn.prepareStatement("INSERT INTO `files` (`id`, `filename`, `type`, `data`) VALUES (?, ?, ?, ?)");
                 statement.setString(1, id);
                 statement.setString(2, fileName);
                 statement.setString(3, type);
