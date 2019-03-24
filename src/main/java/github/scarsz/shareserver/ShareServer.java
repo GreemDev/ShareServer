@@ -43,24 +43,24 @@ public class ShareServer {
         Spark.port(port);
 
         // gzip where possible
-        Spark.after((request, response) -> response.header("Content-Encoding", "gzip"));
+        Spark.after((request, response) ->
+                response.header("Content-Encoding", "gzip"));
 
         // logging
         Spark.afterAfter((request, response) -> {
-            String forwardedFor = request.headers("X-Forwarded-For");
-            String ip = StringUtils.isNotBlank(forwardedFor) ? forwardedFor : request.ip();
             String method = request.requestMethod();
-            String location = request.url() + (StringUtils.isNotBlank(request.queryString()) ? "?" + request.queryString() : "");
-            System.out.println(ip + ":" + request.raw().getRemotePort() + " " + method + " " + location + " -> " + response.status());
+            String location = request.url().replace("http://localhost:8082", "https://img.greemdev.net")
+                    + (StringUtils.isNotBlank(request.queryString()) ? "?" + request.queryString() : "");
+            System.out.println(method + " " + location + " -> " + response.status());
         });
 
         // redirect /id -> /id/filename.ext
         Spark.get("/:id", (request, response) -> {
             PreparedStatement statement = this.conn.prepareStatement("SELECT `filename` FROM `files` WHERE `id` = ? LIMIT 1");
             statement.setString(1, request.params("id"));
-            ResultSet result = statement.executeQuery();
-            if (result.next()) {
-                response.redirect("/" + request.params(":id") + "/" + result.getString("filename"), 301);
+            ResultSet res = statement.executeQuery();
+            if (res.next()) {
+                response.redirect("/" + request.params(":id") + "/" + res.getString("filename"), 301);
             } else {
                 Spark.halt(404, "Not found");
             }
