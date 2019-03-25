@@ -49,8 +49,13 @@ public class ShareServer {
         // logging
         Spark.afterAfter((request, response) -> {
             String method = request.requestMethod();
-            String location = request.url().replace("http://localhost:8082", "https://img.greemdev.net")
-                    + (StringUtils.isNotBlank(request.queryString()) ? "?" + request.queryString() : "");
+            String location;
+            if (isProduction) {
+                location = request.url().replace("http://localhost:" + port, "https://img.greemdev.net")
+                        + (StringUtils.isNotBlank(request.queryString()) ? "?" + request.queryString() : "");
+            } else {
+                location = request.url() + (StringUtils.isNotBlank(request.queryString()) ? "?" + request.queryString() : "");
+            }
             System.out.println(method + " " + location + " -> " + response.status());
         });
 
