@@ -8,7 +8,7 @@ Be aware that this source contains hard-coded values (such as my own public-faci
 Alternatively, you can use the original repository for deploying without editing source.
 
 ShareX Setup:
-Mirror [this](https://img.greemdev.net/pCxHcFsRpf/ShareX_2019-03-21_14-22-55.png), 
+Mirror [this](https://img.greemdev.net/EsbIJkCiIi/ShareX_2019-05-30_11-21-24.png), 
 replacing the crossed out value with your personal key (and the URL, obviously).
 
 The key is configured via a command-line argument:
