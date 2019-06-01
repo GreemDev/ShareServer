@@ -27,7 +27,7 @@ public class ShareServer private constructor(key: String?, port: Int) {
         val isProd: Boolean = !System.getProperty("os.name").contains("Windows")
         if (key == null) throw IllegalArgumentException("No key given")
 
-        this.conn = DriverManager.getConnection("jdbc:h2: " + File("share").absolutePath)
+        this.conn = DriverManager.getConnection("jdbc:h2:" + File("share").absolutePath)
         this.conn.prepareStatement("CREATE TABLE IF NOT EXISTS `files` (" +
                 "`id` VARCHAR NOT NULL, " +
                 "`filename` VARCHAR NOT NULL, " +
@@ -47,7 +47,7 @@ public class ShareServer private constructor(key: String?, port: Int) {
         Spark.port(port)
 
         //use gzip
-        Spark.after(Filter{ request, response ->
+        Spark.after(Filter{ _, response ->
             response.header("Content-Encoding", "gzip")
         })
 
@@ -145,7 +145,7 @@ public class ShareServer private constructor(key: String?, port: Int) {
                 response.redirect(if (isProd)
                     "https://img.greemdev.net/$id/$fileName"
                 else
-                    request.url() + id + "/" + fileName
+                    "${request.url()}$id/$fileName"
                 )
             } catch (ignored: Exception) {
                 response.status(500)
